@@ -121,10 +121,28 @@
     
     for (ReplacementRule *rule in self.replacementRules) {
         if (rule.isEnabled && rule.keyword.length > 0) {
-            NSString *newResult = [result stringByReplacingOccurrencesOfString:rule.keyword
-                                                                    withString:rule.replacement
-                                                                       options:NSCaseInsensitiveSearch
-                                                                         range:NSMakeRange(0, result.length)];
+            NSString *newResult;
+            
+            if (rule.requiredPrefix && rule.requiredPrefix.length > 0) {
+                // Check if text has the required prefix
+                if ([result hasPrefix:rule.requiredPrefix]) {
+                    // Only apply replacement if text starts with required prefix
+                    newResult = [result stringByReplacingOccurrencesOfString:rule.keyword
+                                                                  withString:rule.replacement
+                                                                     options:NSCaseInsensitiveSearch
+                                                                       range:NSMakeRange(0, result.length)];
+                } else {
+                    // No prefix match, continue to next rule
+                    continue;
+                }
+            } else {
+                // Standard replacement - replace all occurrences (no prefix requirement)
+                newResult = [result stringByReplacingOccurrencesOfString:rule.keyword
+                                                              withString:rule.replacement
+                                                                 options:NSCaseInsensitiveSearch
+                                                                   range:NSMakeRange(0, result.length)];
+            }
+            
             if (![newResult isEqualToString:result]) {
                 result = newResult;
                 if (usedRule) {

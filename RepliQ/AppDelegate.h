@@ -22,7 +22,7 @@
 // Notification name for monitoring status changes
 extern NSString * const RepliQMonitoringStatusDidChangeNotification;
 
-@interface AppDelegate : NSObject <NSApplicationDelegate>
+@interface AppDelegate : NSObject <NSApplicationDelegate, NSWindowDelegate>
 
 @property (strong, nonatomic) NSStatusItem *statusItem;
 @property (strong, nonatomic) NSWindowController *mainWindowController;

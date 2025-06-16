@@ -13,6 +13,7 @@
 @property (nonatomic, strong) NSMutableArray<ReplacementRule *> *replacementRules;
 @property (nonatomic, strong) NSTextField *keywordTextField;
 @property (nonatomic, strong) NSTextField *replacementTextField;
+@property (nonatomic, strong) NSTextField *prefixTextField;
 @property (nonatomic, strong) NSButton *addRuleButton;
 @property (nonatomic, strong) NSButton *deleteRuleButton;
 @property (nonatomic, strong) NSTableView *rulesTableView;
@@ -170,6 +171,26 @@
     self.replacementTextField.delegate = self;
     [inputSection addSubview:self.replacementTextField];
     
+    // Required Prefix field
+    NSTextField *prefixLabel = [[NSTextField alloc] init];
+    prefixLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    prefixLabel.stringValue = @"Required Prefix:";
+    prefixLabel.font = [NSFont systemFontOfSize:13 weight:NSFontWeightMedium];
+    prefixLabel.textColor = [NSColor labelColor];
+    prefixLabel.backgroundColor = [NSColor clearColor];
+    prefixLabel.bordered = NO;
+    prefixLabel.editable = NO;
+    [inputSection addSubview:prefixLabel];
+    
+    self.prefixTextField = [[NSTextField alloc] init];
+    self.prefixTextField.translatesAutoresizingMaskIntoConstraints = NO;
+    self.prefixTextField.font = [NSFont systemFontOfSize:13];
+    self.prefixTextField.placeholderString = @"Optional: e.g. https://raw.baidu.com";
+    self.prefixTextField.target = self;
+    self.prefixTextField.action = @selector(textFieldChanged:);
+    self.prefixTextField.delegate = self;
+    [inputSection addSubview:self.prefixTextField];
+    
     // Button section
     NSView *buttonSection = [[NSView alloc] init];
     buttonSection.translatesAutoresizingMaskIntoConstraints = NO;
@@ -263,6 +284,14 @@
     enabledColumn.dataCell = checkboxCell;
     [self.rulesTableView addTableColumn:enabledColumn];
     
+    // Required Prefix column
+    NSTableColumn *prefixColumn = [[NSTableColumn alloc] initWithIdentifier:@"PrefixColumn"];
+    prefixColumn.headerCell.stringValue = @"Required Prefix";
+    prefixColumn.width = 150;
+    prefixColumn.minWidth = 100;
+    prefixColumn.resizingMask = NSTableColumnUserResizingMask;
+    [self.rulesTableView addTableColumn:prefixColumn];
+    
     self.scrollView.documentView = self.rulesTableView;
     [contentView addSubview:self.scrollView];
     
@@ -275,6 +304,7 @@
               inputSection:inputSection
                  findLabel:findLabel
               replaceLabel:replaceLabel
+               prefixLabel:prefixLabel
              buttonSection:buttonSection
                 rulesLabel:rulesLabel];
 }
@@ -287,6 +317,7 @@
             inputSection:(NSView *)inputSection 
                findLabel:(NSTextField *)findLabel 
             replaceLabel:(NSTextField *)replaceLabel 
+             prefixLabel:(NSTextField *)prefixLabel 
            buttonSection:(NSView *)buttonSection 
               rulesLabel:(NSTextField *)rulesLabel {
     
@@ -341,7 +372,7 @@
         [inputSection.topAnchor constraintEqualToAnchor:headerView.bottomAnchor constant:20],
         [inputSection.leadingAnchor constraintEqualToAnchor:contentView.leadingAnchor constant:20],
         [inputSection.trailingAnchor constraintEqualToAnchor:contentView.trailingAnchor constant:-20],
-        [inputSection.heightAnchor constraintEqualToConstant:120]
+        [inputSection.heightAnchor constraintEqualToConstant:180]
     ]];
     
     // Find label and text field constraints
@@ -370,6 +401,20 @@
         [self.replacementTextField.leadingAnchor constraintEqualToAnchor:replaceLabel.trailingAnchor constant:8],
         [self.replacementTextField.trailingAnchor constraintEqualToAnchor:inputSection.trailingAnchor constant:-16],
         [self.replacementTextField.heightAnchor constraintEqualToConstant:24]
+    ]];
+    
+    // Prefix label and text field constraints
+    [NSLayoutConstraint activateConstraints:@[
+        [prefixLabel.topAnchor constraintEqualToAnchor:replaceLabel.bottomAnchor constant:20],
+        [prefixLabel.leadingAnchor constraintEqualToAnchor:inputSection.leadingAnchor constant:16],
+        [prefixLabel.widthAnchor constraintEqualToConstant:100]
+    ]];
+    
+    [NSLayoutConstraint activateConstraints:@[
+        [self.prefixTextField.centerYAnchor constraintEqualToAnchor:prefixLabel.centerYAnchor],
+        [self.prefixTextField.leadingAnchor constraintEqualToAnchor:prefixLabel.trailingAnchor constant:8],
+        [self.prefixTextField.trailingAnchor constraintEqualToAnchor:inputSection.trailingAnchor constant:-16],
+        [self.prefixTextField.heightAnchor constraintEqualToConstant:24]
     ]];
     
     // Button section constraints
@@ -529,7 +574,8 @@
             }
         }
         
-        ReplacementRule *rule = [[ReplacementRule alloc] initWithKeyword:keyword replacement:replacement];
+        NSString *requiredPrefix = self.prefixTextField.stringValue.length > 0 ? self.prefixTextField.stringValue : nil;
+        ReplacementRule *rule = [[ReplacementRule alloc] initWithKeyword:keyword replacement:replacement enabled:YES requiredPrefix:requiredPrefix];
         [self.replacementRules addObject:rule];
         
         // Save rules
@@ -541,6 +587,7 @@
         // Clear text fields
         self.keywordTextField.stringValue = @"";
         self.replacementTextField.stringValue = @"";
+        self.prefixTextField.stringValue = @"";
         
         [self updateUI];
         
@@ -673,6 +720,8 @@
             return rule.replacement;
         } else if ([tableColumn.identifier isEqualToString:@"EnabledColumn"]) {
             return @(rule.isEnabled);
+        } else if ([tableColumn.identifier isEqualToString:@"PrefixColumn"]) {
+            return rule.requiredPrefix ?: @"";
         }
     }
     return nil;
@@ -684,6 +733,11 @@
         
         if ([tableColumn.identifier isEqualToString:@"EnabledColumn"]) {
             rule.isEnabled = [object boolValue];
+            [self saveReplacementRules];
+            [ClipboardManager sharedManager].replacementRules = self.replacementRules;
+        } else if ([tableColumn.identifier isEqualToString:@"PrefixColumn"]) {
+            NSString *prefixValue = [object stringValue];
+            rule.requiredPrefix = prefixValue.length > 0 ? prefixValue : nil;
             [self saveReplacementRules];
             [ClipboardManager sharedManager].replacementRules = self.replacementRules;
         }

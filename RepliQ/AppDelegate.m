@@ -15,6 +15,7 @@ NSString * const RepliQMonitoringStatusDidChangeNotification = @"RepliQMonitorin
 @interface AppDelegate ()
 @property (strong, nonatomic) NSMenu *statusMenu;
 @property (strong, nonatomic) NSMenuItem *monitoringMenuItem;
+@property (nonatomic) BOOL windowIsVisible;
 @end
 
 @implementation AppDelegate
@@ -24,8 +25,8 @@ NSString * const RepliQMonitoringStatusDidChangeNotification = @"RepliQMonitorin
     [self setupStatusBarItem];
     
     // The main window controller is automatically created by storyboard's initialViewController
-    // Show the main window on startup for debugging
-    [self performSelector:@selector(showMainWindow) withObject:nil afterDelay:0.5];
+    // Initialize window state as hidden (user can click status bar to open)
+    self.windowIsVisible = NO;
     
     // Start monitoring by default
     self.isMonitoringEnabled = YES;
@@ -75,8 +76,9 @@ NSString * const RepliQMonitoringStatusDidChangeNotification = @"RepliQMonitorin
     // Create menu
     [self setupStatusMenu];
     
-    // Set menu to status item
-    self.statusItem.menu = self.statusMenu;
+    // Set action for clicking the status item directly
+    statusButton.action = @selector(statusBarButtonClicked:);
+    statusButton.target = self;
 }
 
 - (void)setupStatusMenu {
@@ -92,12 +94,12 @@ NSString * const RepliQMonitoringStatusDidChangeNotification = @"RepliQMonitorin
     // Separator
     [self.statusMenu addItem:[NSMenuItem separatorItem]];
     
-    // Open Settings item
-    NSMenuItem *settingsItem = [[NSMenuItem alloc] initWithTitle:@"Open Settings"
-                                                          action:@selector(showSettings)
-                                                   keyEquivalent:@""];
-    settingsItem.target = self;
-    [self.statusMenu addItem:settingsItem];
+    // Show Window item
+    NSMenuItem *showWindowItem = [[NSMenuItem alloc] initWithTitle:@"Show Window"
+                                                            action:@selector(showMainWindow)
+                                                     keyEquivalent:@""];
+    showWindowItem.target = self;
+    [self.statusMenu addItem:showWindowItem];
     
     // Separator
     [self.statusMenu addItem:[NSMenuItem separatorItem]];
@@ -117,6 +119,33 @@ NSString * const RepliQMonitoringStatusDidChangeNotification = @"RepliQMonitorin
     [self.statusMenu addItem:quitItem];
 }
 
+- (void)statusBarButtonClicked:(NSButton *)sender {
+    NSEvent *currentEvent = [NSApp currentEvent];
+    
+    if (currentEvent.type == NSEventTypeRightMouseUp || 
+        (currentEvent.type == NSEventTypeLeftMouseUp && (currentEvent.modifierFlags & NSEventModifierFlagControl))) {
+        // Right click or Ctrl+Click - show menu using modern approach
+        // Temporarily set the menu to show it
+        self.statusItem.menu = self.statusMenu;
+        
+        // Schedule to remove the menu after a short delay to restore click behavior
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            self.statusItem.menu = nil;
+        });
+    } else {
+        // Left click - toggle window
+        [self toggleMainWindow];
+    }
+}
+
+- (void)toggleMainWindow {
+    if (self.windowIsVisible) {
+        [self hideMainWindow];
+    } else {
+        [self showMainWindow];
+    }
+}
+
 - (void)showMainWindow {
     // Find the main window controller if we don't have a reference
     if (!self.mainWindowController) {
@@ -133,8 +162,19 @@ NSString * const RepliQMonitoringStatusDidChangeNotification = @"RepliQMonitorin
         [self.mainWindowController showWindow:nil];
         [self.mainWindowController.window makeKeyAndOrderFront:nil];
         [NSApp activateIgnoringOtherApps:YES];
+        self.windowIsVisible = YES;
+        
+        // Set up window delegate to track close events
+        self.mainWindowController.window.delegate = self;
     } else {
         NSLog(@"Could not find main window controller");
+    }
+}
+
+- (void)hideMainWindow {
+    if (self.mainWindowController && self.mainWindowController.window) {
+        [self.mainWindowController.window orderOut:nil];
+        self.windowIsVisible = NO;
     }
 }
 
@@ -198,6 +238,14 @@ NSString * const RepliQMonitoringStatusDidChangeNotification = @"RepliQMonitorin
 
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender {
     return NO; // Don't terminate when window is closed for menu bar app
+}
+
+#pragma mark - NSWindowDelegate
+
+- (BOOL)windowShouldClose:(NSWindow *)sender {
+    // Instead of closing, hide the window
+    [self hideMainWindow];
+    return NO; // Don't actually close the window
 }
 
 - (void)applicationWillTerminate:(NSNotification *)aNotification {
